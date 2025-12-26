@@ -141,4 +141,4 @@ if __name__ == "__main__":
             break
 
         else:
-            print("❌ Invalid choice")
+            print("Invalid choice")
