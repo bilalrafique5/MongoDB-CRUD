@@ -96,9 +96,6 @@ def get_all_students(current_user: dict = Depends(get_current_user)):
     students = db.read_all()
     return [student_helper(s) for s in students]
 
-
-
-
 @app.get("/students/name/{name}", response_model=Student, tags=["READ"])
 def get_student_by_name(name: str, current_user: dict = Depends(get_current_user)):
     student = db.read_one({"name": name})
@@ -128,6 +125,7 @@ def get_students_by_name_starts(letter: str, current_user: dict = Depends(get_cu
         raise HTTPException(status_code=404, detail=f"No students found starting with {letter}")
     return [student_helper(s) for s in students]
 
+
 # CREATE
 @app.post("/students/", response_model=dict, tags=['CREATE'])
 def create_student(student: Student, current_user: dict = Depends(get_current_user)):
@@ -144,6 +142,7 @@ def create_students_batch(students: List[Student], current_user: dict = Depends(
     inserted_ids = db.create_many(docs)
     return {"message": f"{len(inserted_ids)} students inserted", "ids": [str(_id) for _id in inserted_ids]}
 
+
 # UPDATE
 @app.put("/students/{name}", response_model=dict, tags=['UPDATE'])
 def update_student(name: str, student: UpdateStudent, current_user: dict = Depends(get_current_user)):
@@ -154,6 +153,7 @@ def update_student(name: str, student: UpdateStudent, current_user: dict = Depen
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Student not found or nothing updated")
     return {"message": f"Student '{name}' updated"}
+
 
 # DELETE
 @app.delete("/students/student_name/{name}", response_model=dict, tags=['DELETE'])
@@ -176,6 +176,7 @@ def delete_all_students(current_user: dict = Depends(get_current_user)):
     return {"message": f"Deleted {result.deleted_count} students"}
 
 
+
 @app.get("/decode-token", tags=["AUTHENTICATION"])
 async def decode_token(current_user:dict=Depends(get_current_user)):
     """
@@ -195,3 +196,5 @@ async def decode_token(current_user:dict=Depends(get_current_user)):
         "verified": True,
         "user_info": user_info
     }
+    
+
