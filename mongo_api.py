@@ -6,13 +6,44 @@ from datetime import datetime
 from main import MongoCRUD
 from auth_utils import hash_password, verify_password, create_access_token, decode_access_token
 from bson import ObjectId
-
-
+from jwt_middleware import jwt_middleware
+from fastapi import Request
 
 app = FastAPI(title="MongoDB CRUD + JWT Authentication")
+app.middleware("http")(jwt_middleware)
 db = MongoCRUD(db_name="testDB", collection_name="students")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+from fastapi.openapi.utils import get_openapi
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    # Define Bearer auth
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT"
+        }
+    }
+    # Apply Bearer auth to all routes except /register and /token
+    for path in openapi_schema["paths"]:
+        if path not in ["/register", "/token"]:
+            for method in openapi_schema["paths"][path]:
+                openapi_schema["paths"][path][method]["security"] = [{"BearerAuth": []}]
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
 
 
 # --- MODELS ---
@@ -47,6 +78,7 @@ def student_helper(student):
         "age": student.get("age"),
         "city": student.get("city")
     }
+
 
 # --- AUTH DEPENDENCY ---
 bearer_scheme = HTTPBearer()
@@ -92,109 +124,119 @@ def login(user: User):
 
 # READ
 @app.get("/students/", response_model=List[Student], tags=["READ"])
-def get_all_students(current_user: dict = Depends(get_current_user)):
-    students = db.read_all()
-    return [student_helper(s) for s in students]
+def get_all_students(request: Request):
+    return [student_helper(s) for s in db.read_all()]
+
 
 @app.get("/students/name/{name}", response_model=Student, tags=["READ"])
-def get_student_by_name(name: str, current_user: dict = Depends(get_current_user)):
+def get_student_by_name(name: str, request: Request):
     student = db.read_one({"name": name})
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
     return student_helper(student)
 
+
 @app.get("/students/id/{id}", response_model=Student, tags=["READ"])
-def get_student_by_id(id: str, current_user: dict = Depends(get_current_user)):
+def get_student_by_id(id: str, request: Request):
     student = db.read_one({"_id": ObjectId(id)})
     if not student:
         raise HTTPException(status_code=404, detail="Student ID not found")
     return student_helper(student)
 
+
 @app.get("/students/filter/age", response_model=List[Student], tags=["READ"])
-def get_students_by_age(min_age: int, current_user: dict = Depends(get_current_user)):
+def get_students_by_age(min_age: int, request: Request):
     students = db.read_many({"age": {"$gt": min_age}})
     if not students:
         raise HTTPException(status_code=404, detail="No students found")
     return [student_helper(s) for s in students]
 
+
 @app.get("/students/filter/name", response_model=List[Student], tags=["READ"])
-def get_students_by_name_starts(letter: str, current_user: dict = Depends(get_current_user)):
-    regex_pattern = f"^{letter}"
-    students = db.read_many({"name": {"$regex": regex_pattern, "$options": "i"}})
+def get_students_by_name_starts(letter: str, request: Request):
+    students = db.read_many({
+        "name": {"$regex": f"^{letter}", "$options": "i"}
+    })
     if not students:
-        raise HTTPException(status_code=404, detail=f"No students found starting with {letter}")
+        raise HTTPException(
+            status_code=404,
+            detail=f"No students found starting with {letter}"
+        )
     return [student_helper(s) for s in students]
 
 
 # CREATE
-@app.post("/students/", response_model=dict, tags=['CREATE'])
-def create_student(student: Student, current_user: dict = Depends(get_current_user)):
+@app.post("/students/", tags=["CREATE"])
+def create_student(student: Student, request: Request):
+    user = request.state.user  # decoded JWT
     doc = student.dict()
     doc["created_at"] = datetime.now()
+    doc["created_by"] = user["sub"]
+
     inserted_id = db.create_one(doc)
     return {"message": "Student created", "id": str(inserted_id)}
 
-@app.post("/students/batch", response_model=dict, tags=["CREATE"])
-def create_students_batch(students: List[Student], current_user: dict = Depends(get_current_user)):
-    docs = [s.dict() for s in students]
-    for doc in docs:
-        doc["created_at"] = datetime.now()
-    inserted_ids = db.create_many(docs)
-    return {"message": f"{len(inserted_ids)} students inserted", "ids": [str(_id) for _id in inserted_ids]}
 
+@app.post("/students/batch", tags=["CREATE"])
+def create_students_batch(students: List[Student], request: Request):
+    user = request.state.user
+
+    docs = []
+    for s in students:
+        doc = s.dict()
+        doc["created_at"] = datetime.now()
+        doc["created_by"] = user["sub"]
+        docs.append(doc)
+
+    ids = db.create_many(docs)
+    return {"message": f"{len(ids)} students inserted", "ids": [str(i) for i in ids]}
 
 # UPDATE
-@app.put("/students/{name}", response_model=dict, tags=['UPDATE'])
-def update_student(name: str, student: UpdateStudent, current_user: dict = Depends(get_current_user)):
-    updated_values = {k: v for k, v in student.dict().items() if v is not None}
-    if not updated_values:
+@app.put("/students/{name}", tags=["UPDATE"])
+def update_student(name: str, student: UpdateStudent, request: Request):
+    updates = {k: v for k, v in student.dict().items() if v is not None}
+    if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
-    result = db.update_one({"name": name}, updated_values)
+
+    result = db.update_one({"name": name}, updates)
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Student not found or nothing updated")
+
     return {"message": f"Student '{name}' updated"}
 
 
+
 # DELETE
-@app.delete("/students/student_name/{name}", response_model=dict, tags=['DELETE'])
-def delete_student_by_name(name: str, current_user: dict = Depends(get_current_user)):
+@app.delete("/students/student_name/{name}", tags=["DELETE"])
+def delete_student_by_name(name: str, request: Request):
     result = db.delete_one({"name": name})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Student not found")
     return {"message": f"Student '{name}' deleted"}
 
-@app.delete("/students/student_id/{id}", response_model=dict, tags=["DELETE"])
-def delete_student_by_id(id: str, current_user: dict = Depends(get_current_user)):
+
+@app.delete("/students/student_id/{id}", tags=["DELETE"])
+def delete_student_by_id(id: str, request: Request):
     result = db.delete_one({"_id": ObjectId(id)})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Student not found")
     return {"message": f"Student '{id}' deleted"}
 
-@app.delete("/students/", response_model=dict, tags=["DELETE"])
-def delete_all_students(current_user: dict = Depends(get_current_user)):
+
+@app.delete("/students/", tags=["DELETE"])
+def delete_all_students(request: Request):
     result = db.delete_all()
     return {"message": f"Deleted {result.deleted_count} students"}
 
 
 
+
 @app.get("/decode-token", tags=["AUTHENTICATION"])
-async def decode_token(current_user:dict=Depends(get_current_user)):
-    """
-    Decode a JWT token and indicate whether it is verified.
-    """
-    # payload = decode_access_token(token)
-    print("CURRENT USER: ", current_user)
-    # if not current_user:
-    #     raise HTTPException(status_code=401, detail="Invalid or expired token")
-   
-    user_info = {
-        "username": current_user['username'],
-        "email": current_user['email']
-    }
-    
+def decode_token(request: Request):
     return {
         "verified": True,
-        "user_info": user_info
+        "user_info": request.state.user
     }
+
     
 
