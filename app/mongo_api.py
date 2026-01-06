@@ -3,15 +3,15 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm,HTT
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
-from main import MongoCRUD
-from auth_utils import hash_password, verify_password, create_access_token, decode_access_token
+from .models import MongoCRUD
+from .auth_utils import hash_password, verify_password, create_access_token, decode_access_token
 from bson import ObjectId
-from jwt_middleware import jwt_middleware
+from .jwt_middleware import jwt_middleware
 from fastapi import Request
 
 app = FastAPI(title="MongoDB CRUD + JWT Authentication")
 app.middleware("http")(jwt_middleware)
-db = MongoCRUD(db_name="testDB", collection_name="students")
+db = MongoCRUD()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -222,6 +222,19 @@ def delete_student_by_id(id: str, request: Request):
         raise HTTPException(status_code=404, detail="Student not found")
     return {"message": f"Student '{id}' deleted"}
 
+@app.delete("/students/delete/{age}", tags=["DELETE"])
+def delete_students_by_age(age:int, request:Request):
+    result=db.delete_one({"age": {"$lt":age}})
+    if result.deleted_count==0:
+        raise HTTPException(status_code=404, detail="No students found below the specified age")
+    return {"message":f"Deleted {result.deleted_count} students below age {age}"}
+    
+@app.delete("/students/delete/batch/{age}", tags=["DELETE"])
+def delete_students_batch(age:int, request:Request):
+    result=db.delete_many({"age": {"$lt":age}})
+    if result.deleted_count==0:
+        raise HTTPException(status_code=404, detail="No students found below the specified age")
+    return {"message":f"Deleted {result.deleted_count} students below age {age}"}
 
 @app.delete("/students/", tags=["DELETE"])
 def delete_all_students(request: Request):

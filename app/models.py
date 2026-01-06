@@ -2,18 +2,24 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 from datetime import datetime
 from bson import ObjectId
+import os
+
 
 class MongoCRUD:
-    def __init__(self, db_name="myDatabase", collection_name="students"):
+    def __init__(self):
+        mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+        db_name = os.getenv("MONGO_DB", "testDB")
+        collection_name = os.getenv("MONGO_COLLECTION", "students")
         try:
-            self.client = MongoClient("mongodb://localhost:27017/")
+            self.client = MongoClient(mongo_uri)
             self.client.admin.command('ping')
             print("Connected to MongoDB successfully")
             self.db = self.client[db_name]
             self.collection = self.db[collection_name]
-            self.user_collection = self.db["users"]  # separate collection for auth users
+            self.user_collection = self.db["users"]
         except ConnectionFailure:
             print("Failed to connect to MongoDB")
+
 
     # --- STUDENT CRUD ---
     def create_one(self, document):
@@ -41,6 +47,9 @@ class MongoCRUD:
 
     def delete_all(self):
         return self.collection.delete_many({})
+    
+    def delete_many(self, query):
+        return self.collection.delete_many(query)
 
     # --- USER AUTH ---
     def create_user(self, user_doc):

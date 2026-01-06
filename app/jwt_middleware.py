@@ -1,6 +1,6 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from auth_utils import decode_access_token
+from .auth_utils import decode_access_token
 
 PUBLIC_PATHS = {
     "/register",

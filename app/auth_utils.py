@@ -4,9 +4,11 @@ from jose import JWTError, jwt
 from typing import Optional
 
 # JWT Config
-SECRET_KEY = "YOUR_SECRET_KEY_HERE"  # Change to a strong secret in production
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+import os
+
+SECRET_KEY = os.getenv("SECRET_KEY", "SUPER_SECRET_KEY")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
 # --- PASSWORD HASHING ---
 def hash_password(password: str) -> str:
