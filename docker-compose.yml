@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: mongo_container
+    ports:
+      - "27017:27017"
+    # Remove environment section → no auth
+    volumes:
+      - mongo_data:/data/db
+
+  fastapi:
+    build: .
+    container_name: fastapi_container
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - mongo
+
+volumes:
+  mongo_data:
