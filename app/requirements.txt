@@ -1,6 +1,8 @@
+
 fastapi
 uvicorn
 pymongo
-python-jose
 passlib[bcrypt]
+python-jose
 python-dotenv
+argon2_cffi

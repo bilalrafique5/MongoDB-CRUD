@@ -1,20 +1,18 @@
-# Step 1: Use official Python image
+# Step 1: Python image
 FROM python:3.12-slim
 
-# Step 2: Set working directory
+# Step 2: Working directory
 WORKDIR /app
 
 # Step 3: Copy requirements
 COPY app/requirements.txt .
-
-# Step 4: Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Step 5: Copy the rest of the app
-COPY app/ /app
+# Step 4: Copy app folder
+COPY app/ /app/app
 
-# Step 6: Expose port 8000
+# Step 5: Expose FastAPI port
 EXPOSE 8000
 
-# Step 7: Run FastAPI
-CMD ["uvicorn", "mongo_api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Step 6: Run FastAPI
+CMD ["uvicorn", "app.mongo_api:app", "--host", "0.0.0.0", "--port", "8000"]

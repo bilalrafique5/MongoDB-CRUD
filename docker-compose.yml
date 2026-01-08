@@ -2,23 +2,30 @@ version: "3.9"
 
 services:
   mongo:
-    image: mongo:7
-    container_name: mongo_container
+    image: mongo:7.0
+    container_name: mongo
     ports:
       - "27017:27017"
-    # Remove environment section → no auth
-    volumes:
-      - mongo_data:/data/db
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mongo-express
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mongo
+    env_file:
+      - .env
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_MONGODB_PORT: 27017
 
   fastapi:
     build: .
-    container_name: fastapi_container
+    container_name: fastapi-app
     ports:
       - "8000:8000"
-    env_file:
-      - .env
     depends_on:
       - mongo
-
-volumes:
-  mongo_data:
+    env_file:
+      - .env

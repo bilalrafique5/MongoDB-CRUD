@@ -1,15 +1,18 @@
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
-from datetime import datetime
 from bson import ObjectId
 import os
+from dotenv import load_dotenv
 
+# Load env variables
+load_dotenv()
 
 class MongoCRUD:
     def __init__(self):
         mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
         db_name = os.getenv("MONGO_DB", "testDB")
         collection_name = os.getenv("MONGO_COLLECTION", "students")
+
         try:
             self.client = MongoClient(mongo_uri)
             self.client.admin.command('ping')
@@ -20,15 +23,12 @@ class MongoCRUD:
         except ConnectionFailure:
             print("Failed to connect to MongoDB")
 
-
     # --- STUDENT CRUD ---
     def create_one(self, document):
-        result = self.collection.insert_one(document)
-        return result.inserted_id
+        return self.collection.insert_one(document).inserted_id
 
     def create_many(self, documents):
-        result = self.collection.insert_many(documents)
-        return result.inserted_ids
+        return self.collection.insert_many(documents).inserted_ids
 
     def read_all(self):
         return list(self.collection.find())
@@ -45,19 +45,15 @@ class MongoCRUD:
     def delete_one(self, query):
         return self.collection.delete_one(query)
 
-    def delete_all(self):
-        return self.collection.delete_many({})
-    
     def delete_many(self, query):
         return self.collection.delete_many(query)
 
+    def delete_all(self):
+        return self.collection.delete_many({})
+
     # --- USER AUTH ---
     def create_user(self, user_doc):
-        """user_doc: {username, email, password}"""
         return self.user_collection.insert_one(user_doc).inserted_id
 
     def find_user(self, query):
         return self.user_collection.find_one(query)
-    
-    def close_connection(self):
-        self.client.close()
